@@ -2,31 +2,63 @@ version: '3.8'
 
 services:
   backend:
-    image: node:18
-    working_dir: /app
-    volumes:
-      - .:/app
-      - /app/node_modules
-    ports:
-      - "3000:3000"
+    image: nginx:latest  # Cambia esto a la imagen correcta de tu backend
     environment:
-      MYSQL_HOST: db
-      MYSQL_USER: root
-      MYSQL_PASSWORD: example
-      MYSQL_DB: todos
-    command: sh -c "npm install && npm start"
+      - ENV_VAR=value
+    ports:
+      - "8080:8080"
     depends_on:
       - db
+      - localstack
+    networks:
+      - default
 
   db:
     image: mysql:5.7
     environment:
-      MYSQL_ROOT_PASSWORD: example
-      MYSQL_DATABASE: todos
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: devops_db
+      MYSQL_USER: dev_user
+      MYSQL_PASSWORD: dev_password
     ports:
-      - "3307:3306"
+      - "3307:3306"  # Cambiar a 3307 si el puerto 3306 está ocupado
     volumes:
       - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "127.0.0.1:4566:4566"  # Restringir a localhost
+    environment:
+      - SERVICES=ec2,rds,vpc,s3,iam,lambda
+      - DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - DEBUG=${DEBUG:-0}
+      - DATA_DIR=/var/lib/localstack
+    volumes:
+      - "/tmp/localstack_data:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
 
 volumes:
   db_data:
+    driver: local
+
+networks:
+  default:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.0.0/16

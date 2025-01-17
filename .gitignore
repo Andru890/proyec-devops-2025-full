@@ -22,3 +22,13 @@ yarn-error.log*
 # Operating System Files
 .DS_Store
 Thumbs.db
+
+# Environment variables
+.env
+
+# Node
+node_modules/
+
+# .terraform directory
+.terraform/
+
