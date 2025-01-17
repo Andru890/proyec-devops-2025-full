@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   backend:
     image: nginx:latest  # Cambia esto a la imagen correcta de tu backend
