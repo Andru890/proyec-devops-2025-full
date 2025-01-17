@@ -1,6 +1,6 @@
 services:
   backend:
-    image: nginx:latest  # Cambia esto a la imagen correcta de tu backend
+    image: andrespistone/proyec-devops-2025-full-backend:latest
     environment:
       - ENV_VAR=value
     ports:
