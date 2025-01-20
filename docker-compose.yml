@@ -1,74 +1,126 @@
+version: '3.9'
+
 services:
   backend:
-    image: ${{ secrets.DOCKERHUB_USERNAME }}/project-devops-2025:latest
+    image: node:18.12.1
     working_dir: /app
     volumes:
       - .:/app
       - /app/node_modules
     ports:
-      - '3000:3000'
+      - "3000:3000"
     environment:
-      MYSQL_HOST: db
-      MYSQL_USER: ${{ secrets.MYSQL_USER }}
-      MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
-      MYSQL_DB: ${{ secrets.MYSQL_DATABASE }}
+      - MYSQL_HOST=db
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DB=${MYSQL_DATABASE}
     command: sh -c "npm install && npm start"
     depends_on:
       - db
-      - localstack
+      # - localstack
+    networks:
+      - monitoring-network
+    container_name: todo-backend
 
   db:
     image: mysql:5.7
+    platform: ${MYSQL_PLATFORM:-}
     environment:
-      MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
-      MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
-      MYSQL_USER: ${{ secrets.MYSQL_USER }}
-      MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
     ports:
-      - '3307:3306'
+      - "3307:3306"
     volumes:
       - db_data:/var/lib/mysql
+    networks:
+      - monitoring-network
+    container_name: mysql-db
     healthcheck:
-      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost']
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
       timeout: 5s
       retries: 5
     restart: unless-stopped
 
-  localstack:
-    image: localstack/localstack:latest
+  prometheus:
+    image: prom/prometheus
     ports:
-      - '127.0.0.1:4566:4566'
-    environment:
-      - SERVICES=ec2,rds,vpc,s3,iam,lambda
-      - DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}
-      - DOCKER_HOST=unix:///var/run/docker.sock
-      - DEBUG=${DEBUG:-0}
-      - DATA_DIR=/var/lib/localstack
+      - "9090:9090"
     volumes:
-      - '/tmp/localstack_data:/var/lib/localstack'
-      - '/var/run/docker.sock:/var/run/docker.sock'
-    healthcheck:
-      test:
-        [
-          'CMD',
-          'curl',
-          '-f',
-          'http://localhost:4566/_localstack/health',
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
+      - ./src/monitoring/prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - monitoring-network
+    container_name: prometheus
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./src/monitoring/grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - prometheus
+    networks:
+      - monitoring-network
+    container_name: grafana
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    ports:
+      - "9115:9115"
+    volumes:
+      - ./src/monitoring/blackbox:/config
+    command:
+      - --config.file=/config/config.yml
+    networks:
+      - monitoring-network
+    container_name: blackbox-exporter
+
+# Disable Localstack for now
+#############################################################
+  # localstack:
+  #   image: localstack/localstack:latest
+  #   ports:
+  #     - "127.0.0.1:4566:4566"
+  #   environment:
+  #     - SERVICES=ec2,rds,vpc,s3,iam,lambda
+  #     - DEFAULT_REGION=${AWS_DEFAULT_REGION}
+  #     - DOCKER_HOST=unix:///var/run/docker.sock
+  #     - DEBUG=${DEBUG:-0}
+  #     - DATA_DIR=/var/lib/localstack
+  #   volumes:
+  #     - "/tmp/localstack_data:/var/lib/localstack"
+  #     - "/var/run/docker.sock:/var/run/docker.sock"
+  #   healthcheck:
+  #     test:
+  #       [
+  #         "CMD",
+  #         "curl",
+  #         "-f",
+  #         "http://localhost:4566/_localstack/health",
+  #       ]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #   restart: unless-stopped
+  #############################################################
 
 volumes:
   db_data:
+  prometheus_data:
+  grafana_data:
     driver: local
 
 networks:
-  default:
+  monitoring-network:
     driver: bridge
-    ipam:
-      driver: default
-      config:
-        - subnet: 172.28.0.0/16
