@@ -32,3 +32,5 @@ node_modules/
 # .terraform directory
 .terraform/
 
+# .tfstate files
+.terraform.tfvars
