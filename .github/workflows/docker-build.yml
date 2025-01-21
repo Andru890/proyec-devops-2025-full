@@ -3,7 +3,7 @@ name: Build and Push Docker Images
 on:
   push:
     branches:
-      - main
+      - prod
 
 jobs:
   build-and-push:
@@ -39,14 +39,3 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/project-devops-2025:${{ env.VERSION }}
             ${{ secrets.DOCKERHUB_USERNAME }}/project-devops-2025:latest
           platforms: linux/amd64,linux/arm64
-
-      # Opcional: Levantar el entorno usando Docker Compose para pruebas
-      - name: Set up Docker Compose and start services
-        run: |
-          docker-compose -f docker-compose.yml up -d
-        env:
-          MYSQL_USER: ${{ secrets.MYSQL_USER }}
-          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
-          MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
-          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
-          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
